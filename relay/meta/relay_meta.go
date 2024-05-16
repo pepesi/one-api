@@ -1,12 +1,14 @@
 package meta
 
 import (
+	"strings"
+
 	"github.com/gin-gonic/gin"
+	"github.com/sirupsen/logrus"
 	"github.com/songquanpeng/one-api/common/ctxkey"
 	"github.com/songquanpeng/one-api/model"
 	"github.com/songquanpeng/one-api/relay/channeltype"
 	"github.com/songquanpeng/one-api/relay/relaymode"
-	"strings"
 )
 
 type Meta struct {
@@ -29,6 +31,27 @@ type Meta struct {
 	PromptTokens    int // only for DoResponse
 }
 
+func (m *Meta) ToLogrusFields() logrus.Fields {
+	return logrus.Fields{
+		"mode":              m.Mode,
+		"channel_type":      m.ChannelType,
+		"channel_id":        m.ChannelId,
+		"token_id":          m.TokenId,
+		"token_name":        m.TokenName,
+		"user_id":           m.UserId,
+		"group":             m.Group,
+		"model_mapping":     m.ModelMapping,
+		"base_url":          m.BaseURL,
+		"api_key":           m.APIKey,
+		"api_type":          m.APIType,
+		"config":            m.Config,
+		"is_stream":         m.IsStream,
+		"origin_model_name": m.OriginModelName,
+		"actual_model_name": m.ActualModelName,
+		"request_url_path":  m.RequestURLPath,
+		"prompt_tokens":     m.PromptTokens,
+	}
+}
 func GetByContext(c *gin.Context) *Meta {
 	meta := Meta{
 		Mode:            relaymode.GetByPath(c.Request.URL.Path),

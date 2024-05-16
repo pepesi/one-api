@@ -4,7 +4,15 @@ import (
 	"bytes"
 	"encoding/json"
 	"fmt"
+	"io"
+	"net/http"
+	"strings"
+
+	"github.com/tidwall/gjson"
+
 	"github.com/gin-gonic/gin"
+	"github.com/songquanpeng/one-api/common/audit"
+	"github.com/songquanpeng/one-api/common/helper"
 	"github.com/songquanpeng/one-api/common/logger"
 	"github.com/songquanpeng/one-api/relay"
 	"github.com/songquanpeng/one-api/relay/adaptor/openai"
@@ -14,8 +22,6 @@ import (
 	"github.com/songquanpeng/one-api/relay/channeltype"
 	"github.com/songquanpeng/one-api/relay/meta"
 	"github.com/songquanpeng/one-api/relay/model"
-	"io"
-	"net/http"
 )
 
 func RelayTextHelper(c *gin.Context) *model.ErrorWithStatusCode {
@@ -91,7 +97,32 @@ func RelayTextHelper(c *gin.Context) *model.ErrorWithStatusCode {
 		return RelayErrorHandler(resp)
 	}
 
-	// do response
+	buf := captureResponseBody(resp)
+	defer func() {
+		lines := strings.Split(buf.String(), "\n")
+		bts := []string{}
+		for _, line := range lines {
+			line = strings.TrimSpace(line)
+			line = strings.Trim(line, "\n")
+			if strings.HasPrefix(string(line), "data:") {
+				line = line[5:]
+			}
+			eevt := gjson.Get(line, "event")
+			etype := gjson.Get(line, "message.type")
+			econtent := gjson.Get(line, "message.content")
+			if eevt.String() == "message" {
+				if etype.String() == "answer" {
+					bts = append(bts, econtent.String())
+				}
+			}
+		}
+
+		audit.Logger().
+			WithField("stage", "question").
+			WithField("requestid", c.GetString(helper.RequestIdKey)).
+			WithFields(meta.ToLogrusFields()).
+			Info(strings.Join(bts, ""))
+	}()
 	usage, respErr := adaptor.DoResponse(c, resp, meta)
 	if respErr != nil {
 		logger.Errorf(ctx, "respErr is not nil: %+v", respErr)
