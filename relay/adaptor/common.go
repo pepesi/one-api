@@ -4,18 +4,13 @@ import (
 	"bytes"
 	"errors"
 	"fmt"
-	"github.com/gin-gonic/gin"
-	"github.com/songquanpeng/one-api/common/client"
-	"github.com/songquanpeng/one-api/relay/meta"
 	"io"
 	"net/http"
 
 	"github.com/gin-gonic/gin"
-	"github.com/songquanpeng/one-api/common/audit"
-	"github.com/songquanpeng/one-api/common/helper"
-	// "github.com/songquanpeng/one-api/relay/client"
+	"github.com/songquanpeng/one-api/common/client"
 	"github.com/songquanpeng/one-api/relay/meta"
-	"github.com/tidwall/gjson"
+	// "github.com/songquanpeng/one-api/relay/client"
 )
 
 func SetupCommonRequestHeader(c *gin.Context, req *http.Request, meta *meta.Meta) {
@@ -42,20 +37,12 @@ func DoRequestHelper(a Adaptor, c *gin.Context, meta *meta.Meta, requestBody io.
 	if err != nil {
 		return nil, fmt.Errorf("setup request header failed: %w", err)
 	}
+
+	// TODO: MSXF: log raw request to real upstream
 	resp, err := DoRequest(c, req)
 	if err != nil {
 		return nil, fmt.Errorf("do request failed: %w", err)
 	}
-	defer func() {
-		raw := logBuf.String()
-		q := gjson.Get(raw, "query")
-		// user := gjson.Get(raw, "user")
-		audit.Logger().
-			WithField("stage", "answer").
-			WithField("requestid", c.GetString(helper.RequestIdKey)).
-			WithFields(meta.ToLogrusFields()).
-			Info(q)
-	}()
 	return resp, nil
 }
 

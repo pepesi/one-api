@@ -1,12 +1,13 @@
 package config
 
 import (
-	"github.com/songquanpeng/one-api/common/env"
 	"os"
 	"strconv"
 	"strings"
 	"sync"
 	"time"
+
+	"github.com/songquanpeng/one-api/common/env"
 
 	"github.com/google/uuid"
 )
@@ -55,6 +56,8 @@ var EmailDomainWhitelist = []string{
 var DebugEnabled = strings.ToLower(os.Getenv("DEBUG")) == "true"
 var DebugSQLEnabled = strings.ToLower(os.Getenv("DEBUG_SQL")) == "true"
 var MemoryCacheEnabled = strings.ToLower(os.Getenv("MEMORY_CACHE_ENABLED")) == "true"
+var ClientAuditEnabled = strings.ToLower(os.Getenv("CLIENT_AUDIT_ENABLED")) == "true"
+var UpstreamAuditEnabled = strings.ToLower(os.Getenv("UPSTREAM_AUDIT_ENABLED")) == "true"
 
 var LogConsumeEnabled = true
 

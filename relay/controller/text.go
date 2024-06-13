@@ -6,13 +6,10 @@ import (
 	"fmt"
 	"io"
 	"net/http"
-	"strings"
-
-	"github.com/tidwall/gjson"
 
 	"github.com/gin-gonic/gin"
 	"github.com/songquanpeng/one-api/common/audit"
-	"github.com/songquanpeng/one-api/common/helper"
+	"github.com/songquanpeng/one-api/common/config"
 	"github.com/songquanpeng/one-api/common/logger"
 	"github.com/songquanpeng/one-api/relay"
 	"github.com/songquanpeng/one-api/relay/adaptor/openai"
@@ -45,6 +42,7 @@ func RelayTextHelper(c *gin.Context) *model.ErrorWithStatusCode {
 	groupRatio := billingratio.GetGroupRatio(meta.Group)
 	ratio := modelRatio * groupRatio
 	// pre-consume quota
+	println(">>>>>>>> ", textRequest.Model)
 	promptTokens := getPromptTokens(textRequest, meta.Mode)
 	meta.PromptTokens = promptTokens
 	preConsumedQuota, bizErr := preConsumeQuota(ctx, textRequest, promptTokens, ratio, meta)
@@ -86,6 +84,18 @@ func RelayTextHelper(c *gin.Context) *model.ErrorWithStatusCode {
 		requestBody = bytes.NewBuffer(jsonData)
 	}
 
+	if config.UpstreamAuditEnabled {
+		// copy requestBody for logging
+		buf := &bytes.Buffer{}
+		requestBody = io.TeeReader(requestBody, buf)
+		defer func() {
+			audit.Logger().
+				WithField("raw", audit.B64encode(buf.Bytes())).
+				WithFields(meta.ToLogrusFields()).
+				Info("upstream raw request")
+		}()
+	}
+
 	// do request
 	resp, err := adaptor.DoRequest(c, meta, requestBody)
 	if err != nil {
@@ -97,32 +107,15 @@ func RelayTextHelper(c *gin.Context) *model.ErrorWithStatusCode {
 		return RelayErrorHandler(resp)
 	}
 
-	buf := captureResponseBody(resp)
-	defer func() {
-		lines := strings.Split(buf.String(), "\n")
-		bts := []string{}
-		for _, line := range lines {
-			line = strings.TrimSpace(line)
-			line = strings.Trim(line, "\n")
-			if strings.HasPrefix(string(line), "data:") {
-				line = line[5:]
-			}
-			eevt := gjson.Get(line, "event")
-			etype := gjson.Get(line, "message.type")
-			econtent := gjson.Get(line, "message.content")
-			if eevt.String() == "message" {
-				if etype.String() == "answer" {
-					bts = append(bts, econtent.String())
-				}
-			}
-		}
-
-		audit.Logger().
-			WithField("stage", "question").
-			WithField("requestid", c.GetString(helper.RequestIdKey)).
-			WithFields(meta.ToLogrusFields()).
-			Info(strings.Join(bts, ""))
-	}()
+	if config.UpstreamAuditEnabled {
+		buf := audit.CaptureHTTPResponseBody(resp)
+		defer func() {
+			audit.Logger().
+				WithField("raw", audit.B64encode(buf.Bytes())).
+				WithFields(meta.ToLogrusFields()).
+				Infof("upstream raw response")
+		}()
+	}
 	usage, respErr := adaptor.DoResponse(c, resp, meta)
 	if respErr != nil {
 		logger.Errorf(ctx, "respErr is not nil: %+v", respErr)

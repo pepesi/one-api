@@ -9,6 +9,7 @@ import (
 
 	"github.com/gin-gonic/gin"
 	"github.com/songquanpeng/one-api/common"
+	"github.com/songquanpeng/one-api/common/audit"
 	"github.com/songquanpeng/one-api/common/config"
 	"github.com/songquanpeng/one-api/common/ctxkey"
 	"github.com/songquanpeng/one-api/common/helper"
@@ -17,6 +18,7 @@ import (
 	dbmodel "github.com/songquanpeng/one-api/model"
 	"github.com/songquanpeng/one-api/monitor"
 	"github.com/songquanpeng/one-api/relay/controller"
+	"github.com/songquanpeng/one-api/relay/meta"
 	"github.com/songquanpeng/one-api/relay/model"
 	"github.com/songquanpeng/one-api/relay/relaymode"
 )
@@ -24,6 +26,17 @@ import (
 // https://platform.openai.com/docs/api-reference/chat
 
 func relayHelper(c *gin.Context, relayMode int) *model.ErrorWithStatusCode {
+	if config.ClientAuditEnabled {
+		buf := audit.CaptureResponseBody(c)
+		m := meta.GetByContext(c)
+		defer func() {
+			audit.Logger().
+				WithField("raw", audit.B64encode(buf.Bytes())).
+				WithField("parsed", audit.ParseOPENAIStreamResponse(buf)).
+				WithFields(m.ToLogrusFields()).
+				Info("client response")
+		}()
+	}
 	var err *model.ErrorWithStatusCode
 	switch relayMode {
 	case relaymode.ImagesGenerations:
@@ -46,6 +59,14 @@ func Relay(c *gin.Context) {
 	if config.DebugEnabled {
 		requestBody, _ := common.GetRequestBody(c)
 		logger.Debugf(ctx, "request body: %s", string(requestBody))
+	}
+	if config.ClientAuditEnabled {
+		requestBody, _ := common.GetRequestBody(c)
+		m := meta.GetByContext(c)
+		audit.Logger().
+			WithField("raw", audit.B64encode(requestBody)).
+			WithFields(m.ToLogrusFields()).
+			Info("client request")
 	}
 	channelId := c.GetInt(ctxkey.ChannelId)
 	userId := c.GetInt("id")
@@ -76,7 +97,7 @@ func Relay(c *gin.Context) {
 			continue
 		}
 		middleware.SetupContextForSelectedChannel(c, channel, originalModel)
-		requestBody, err := common.GetRequestBody(c)
+		requestBody, _ := common.GetRequestBody(c)
 		c.Request.Body = io.NopCloser(bytes.NewBuffer(requestBody))
 		bizErr = relayHelper(c, relayMode)
 		if bizErr == nil {

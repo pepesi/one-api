@@ -3,6 +3,9 @@ package main
 import (
 	"embed"
 	"fmt"
+	"os"
+	"strconv"
+
 	"github.com/gin-contrib/sessions"
 	"github.com/gin-contrib/sessions/cookie"
 	"github.com/gin-gonic/gin"
@@ -15,8 +18,7 @@ import (
 	"github.com/songquanpeng/one-api/model"
 	"github.com/songquanpeng/one-api/relay/adaptor/openai"
 	"github.com/songquanpeng/one-api/router"
-	"os"
-	"strconv"
+	"github.com/songquanpeng/one-api/rproxy"
 )
 
 //go:embed web/build/*
@@ -98,15 +100,19 @@ func main() {
 	client.Init()
 
 	// Initialize HTTP server
+	p := middleware.NewAuthProvider("", "", "")
 	server := gin.New()
+
 	server.Use(gin.Recovery())
 	// This will cause SSE not to work!!!
 	//server.Use(gzip.Gzip(gzip.DefaultCompression))
 	server.Use(middleware.RequestId())
 	middleware.SetUpLogger(server)
 	// Initialize session store
+	p.GetUserInfo("")
 	store := cookie.NewStore([]byte(config.SessionSecret))
 	server.Use(sessions.Sessions("session", store))
+	server.Use(rproxy.NewDynamicProxyServer().Dispatch)
 
 	router.SetRouter(server, buildFS)
 	var port = os.Getenv("PORT")

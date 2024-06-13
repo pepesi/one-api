@@ -1,10 +1,6 @@
 package audit
 
 import (
-	"os"
-	"os/signal"
-	"syscall"
-
 	"github.com/sirupsen/logrus"
 	"gopkg.in/natefinch/lumberjack.v2"
 )
@@ -21,15 +17,6 @@ func init() {
 		MaxBackups: 300,
 		MaxAge:     90, // days
 	}
-	c := make(chan os.Signal, 1)
-	signal.Notify(c, syscall.SIGHUP)
-
-	go func() {
-		for {
-			<-c
-			loger.Rotate()
-		}
-	}()
 	logger = logrus.New()
 	logger.SetOutput(loger)
 	logger.SetFormatter(&logrus.JSONFormatter{})

@@ -3,14 +3,17 @@ package controller
 import (
 	"encoding/json"
 	"fmt"
-	"github.com/songquanpeng/one-api/common"
-	"github.com/songquanpeng/one-api/common/config"
-	"github.com/songquanpeng/one-api/common/ctxkey"
-	"github.com/songquanpeng/one-api/common/random"
-	"github.com/songquanpeng/one-api/model"
 	"net/http"
 	"strconv"
 	"time"
+
+	"github.com/songquanpeng/one-api/common"
+	"github.com/songquanpeng/one-api/common/config"
+	"github.com/songquanpeng/one-api/common/ctxkey"
+	"github.com/songquanpeng/one-api/common/helper"
+	"github.com/songquanpeng/one-api/common/logger"
+	"github.com/songquanpeng/one-api/common/random"
+	"github.com/songquanpeng/one-api/model"
 
 	"github.com/gin-contrib/sessions"
 	"github.com/gin-gonic/gin"
@@ -173,12 +176,32 @@ func Register(c *gin.Context) {
 		})
 		return
 	}
-
+	go func() {
+		err := user.ValidateAndFill()
+		if err != nil {
+			logger.Errorf(c, "user.ValidateAndFill failed: %e", err)
+			return
+		}
+		cleanToken := model.Token{
+			UserId:         user.Id,
+			Name:           "default",
+			Key:            random.GenerateKey(),
+			CreatedTime:    helper.GetTimestamp(),
+			AccessedTime:   helper.GetTimestamp(),
+			ExpiredTime:    -1,
+			RemainQuota:    -1,
+			UnlimitedQuota: true,
+		}
+		err = cleanToken.Insert()
+		if err != nil {
+			logger.Errorf(c, "cleanToken.Insert failed: %e", err)
+			return
+		}
+	}()
 	c.JSON(http.StatusOK, gin.H{
 		"success": true,
 		"message": "",
 	})
-	return
 }
 
 func GetAllUsers(c *gin.Context) {
