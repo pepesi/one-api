@@ -100,7 +100,6 @@ func main() {
 	client.Init()
 
 	// Initialize HTTP server
-	p := middleware.NewAuthProvider("", "", "")
 	server := gin.New()
 
 	server.Use(gin.Recovery())
@@ -109,7 +108,6 @@ func main() {
 	server.Use(middleware.RequestId())
 	middleware.SetUpLogger(server)
 	// Initialize session store
-	p.GetUserInfo("")
 	store := cookie.NewStore([]byte(config.SessionSecret))
 	server.Use(sessions.Sessions("session", store))
 	server.Use(rproxy.NewDynamicProxyServer().Dispatch)
